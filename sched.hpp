@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <future>
 #include <hpx/execution.hpp>
 #include <optional>
 #include <queue>
@@ -18,11 +17,11 @@ public:
   std::vector<TaskRef>
       parents; // task gets unlocked when all parents are finished
   std::vector<ResourceRef> required_resources;
-  std::function<int(int)> task;
+  std::function<void(void)> task;
 
-  std::optional<ex::any_sender<int>> senderOpt = std::nullopt;
+  std::optional<ex::any_sender<>> senderOpt = std::nullopt;
 
-  Task(std::function<int(int)> f_) : task(f_){};
+  Task(std::function<void(void)> f_) : task(f_){};
   // tasks can't run untill run is called on schedular
 };
 
@@ -96,11 +95,11 @@ public:
     t.get()->required_resources.push_back(r);
   }
 
-  ex::any_sender<int> run() {
+  ex::any_sender<> run() {
     // returns a sender which when scheduuled on a executor,
     // executes all the remaining senders
 
-    ex::any_sender<int> root = ex::just(0);
+    ex::any_sender<> root = ex::just();
 
     std::unordered_map<int, int> num_parents_traversed;
     std::queue<TaskRef> q;
@@ -120,14 +119,14 @@ public:
       });
 
       if (t->parents.size() == 0)
-        t->senderOpt = ex::let_value(root, t->task);
+        t->senderOpt = ex::then(root, t->task);
       else {
-        std::vector<ex::any_sender<int>> senders_of_parents;
+        std::vector<ex::any_sender<>> senders_of_parents;
         std::for_each(t->parents.begin(), t->parents.end(), [&](TaskRef tp) {
           senders_of_parents.push_back(tp->senderOpt.value());
         });
         t->senderOpt =
-            ex::when_all_vector(senders_of_parents) | ex::let_value(t->task);
+            ex::when_all_vector(std::move(senders_of_parents)) | ex::then(t->task);
       }
     }
 
