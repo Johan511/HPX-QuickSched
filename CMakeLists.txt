@@ -7,4 +7,5 @@ find_package(HPX REQUIRED)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-add_hpx_executable(matmul SOURCES matmul.cpp)
+add_hpx_executable(sched SOURCES sched.cpp)
+
