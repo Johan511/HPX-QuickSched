@@ -9,20 +9,16 @@
 class TaskRef;
 class ResourceRef;
 
-namespace ex = hpx::execution::experimental;
-
 class Task {
 public:
   std::vector<TaskRef> children; // finishing this task unlocks children
   std::vector<TaskRef>
       parents; // task gets unlocked when all parents are finished
   std::vector<ResourceRef> required_resources;
-  std::function<void(void)> task;
+  std::function<void(void)> f;
+  hpx::future<void> future;
 
-  std::optional<ex::any_sender<>> senderOpt = std::nullopt;
-
-  Task(std::function<void(void)> f_) : task(f_){};
-  // tasks can't run untill run is called on schedular
+  Task(auto &&f_) : f(HPX_FORWARD(decltype(f_), f_)){};
 };
 
 class TaskRef {
@@ -95,11 +91,11 @@ public:
     t.get()->required_resources.push_back(r);
   }
 
-  ex::any_sender<> run() {
-    // returns a sender which when scheduuled on a executor,
-    // executes all the remaining senders
+  hpx::future<void> run() {
+    std::mutex mtx;
+    mtx.lock();
 
-    ex::any_sender<> root = ex::just();
+    hpx::future root = hpx::async([&]() { mtx.lock(); });
 
     std::unordered_map<int, int> num_parents_traversed;
     std::queue<TaskRef> q;
@@ -119,17 +115,16 @@ public:
       });
 
       if (t->parents.size() == 0)
-        t->senderOpt = ex::then(root, t->task);
+        t->future = root.then([&](auto &&...) { return t->f(); });
       else {
-        std::vector<ex::any_sender<>> senders_of_parents;
+        std::vector<std::reference_wrapper<hpx::future<void>>>
+            futures_of_parents;
         std::for_each(t->parents.begin(), t->parents.end(), [&](TaskRef tp) {
-          senders_of_parents.push_back(tp->senderOpt.value());
+          futures_of_parents.emplace_back(tp->future);
         });
-        t->senderOpt =
-            ex::when_all_vector(senders_of_parents) | ex::then(t->task);
+        t->future =
+            hpx::when_all(futures_of_parents, futures_of_parents.size());
       }
     }
-
-    return root;
   }
 };
