@@ -14,7 +14,7 @@ class Resource {
 public:
   std::vector<ResourceRef> children;
   std::vector<ResourceRef> parents;
-  std::mutex resource_mtx{};
+  hpx::mutex resource_mtx{};
 
   std::vector<ResourceRef> locks_held;
 };
@@ -108,7 +108,7 @@ class Scheduler {
   std::unordered_map<rid_t, ResourceRef> resource_map;
 
   hpx::shared_future<void> root;
-  std::mutex mtx;
+  hpx::mutex mtx;
 
 public:
   Scheduler(){};

@@ -52,7 +52,9 @@ void multiply_matrix(double *A, double *B, double *C, int m, int n, int k) {
     for (int kk = 0; kk < k; kk++) {
       ResourceRef rr = sched.add_resource();
       for (int jj = 0; jj < n; jj++) {
-        sched.add_task([=]() { matmul(32, 32, 32, A, m, B, n, C, m); });
+        TaskRef tr =
+            sched.add_task([=]() { matmul(32, 32, 32, A, m, B, n, C, m); });
+        sched.add_required_resource(tr, rr);
       }
     }
 
