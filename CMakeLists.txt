@@ -10,5 +10,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
 add_executable(future future.cpp)
 target_link_libraries(future PUBLIC HPX::hpx)
 
-add_executable(sender sender.cpp)
-target_link_libraries(sender PUBLIC HPX::hpx)
+add_executable(matmul matmul.cpp)
+target_link_libraries(matmul PUBLIC HPX::hpx)
+
+# add_executable(sender sender.cpp)
+# target_link_libraries(sender PUBLIC HPX::hpx)

@@ -10,6 +10,52 @@
 class TaskRef;
 class ResourceRef;
 
+class Resource {
+public:
+  std::vector<ResourceRef> children;
+  std::vector<ResourceRef> parents;
+  std::mutex resource_mtx{};
+
+  std::vector<ResourceRef> locks_held;
+};
+
+class ResourceRef {
+public:
+  Resource *resource;
+  std::uint64_t rid;
+
+  // make sure parents are sorted
+  void unlock() {
+    for (ResourceRef rr : resource->locks_held)
+      resource->resource_mtx.unlock();
+  }
+
+  void lock() {
+    while (true) {
+      std::queue<ResourceRef> q;
+      q.push(*this);
+
+      while (q.size() != 0) {
+        ResourceRef front = q.front();
+        bool lockHeld = front->resource_mtx.try_lock();
+        if (!lockHeld) {
+          unlock();
+          continue;
+        }
+
+        resource->locks_held.push_back(front);
+        for (ResourceRef rr : front->parents)
+          q.push(rr);
+      }
+    }
+  }
+
+  ResourceRef(std::uint64_t rid_, Resource *resource_)
+      : resource(resource_), rid(rid_) {}
+  Resource *get() { return resource; };
+  Resource *operator->() { return get(); }
+};
+
 class Task {
 public:
   std::vector<TaskRef> children; // finishing this task unlocks children
@@ -19,7 +65,23 @@ public:
   std::function<void(void)> f;
   hpx::shared_future<void> future;
 
-  Task(auto &&f_) : f(HPX_FORWARD(decltype(f_), f_)){};
+  void get_lock_on_all_resources() {
+    // sorting is required to enforce total ordering
+    std::sort(required_resources.begin(), required_resources.end(),
+              [](const ResourceRef &l, const ResourceRef &r) {
+                return l.rid < r.rid;
+              });
+
+    std::for_each(required_resources.begin(), required_resources.end(),
+                  [](ResourceRef &rr) { rr.lock(); });
+  }
+
+  Task(auto &&f_) {
+    f = [this, f_ = HPX_FORWARD(decltype(f_), f_)]() mutable {
+      get_lock_on_all_resources();
+      f_();
+    };
+  }
 };
 
 class TaskRef {
@@ -33,22 +95,6 @@ public:
 public:
   Task *get() { return task; };
   Task *operator->() { return get(); }
-};
-
-class Resource {
-public:
-  std::vector<ResourceRef> children;
-  std::vector<ResourceRef> parents;
-};
-
-class ResourceRef {
-public:
-  Resource *resource;
-  std::uint64_t rid;
-
-  ResourceRef(std::uint64_t rid_, Resource *resource_)
-      : resource(resource_), rid(rid_) {}
-  Resource *get() { return resource; };
 };
 
 class Scheduler {
