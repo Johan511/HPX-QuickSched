@@ -5,7 +5,7 @@ set(HPX_DIR /home/johan511/hpx/build-master/lib/cmake/HPX)
 
 find_package(HPX REQUIRED)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 add_executable(future future.cpp)
 target_link_libraries(future PUBLIC HPX::hpx)

@@ -58,7 +58,8 @@ void multiply_matrix(double *A, double *B, double *C, int m, int n, int k) {
       }
     }
 
-  sched.run();
+  auto f = sched.run();
+  f.wait();
 }
 
 int hpx_main(hpx::program_options::variables_map &vm) {
