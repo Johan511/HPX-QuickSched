@@ -62,6 +62,7 @@ class Scheduler {
   std::unordered_map<rid_t, ResourceRef> resource_map;
 
   hpx::shared_future<void> root;
+  std::mutex mtx;
 
 public:
   Scheduler(){};
@@ -98,7 +99,6 @@ public:
   }
 
   hpx::future<void> run() {
-    std::mutex mtx;
     mtx.lock();
 
     root = hpx::async([&]() { mtx.lock(); });
@@ -121,22 +121,20 @@ public:
       });
 
       if (t->parents.size() == 0)
-        t->future = root.then([&](auto &&...) { return t->f(); });
+        t->future = root.then([=](auto &&...) mutable { return t->f(); });
       else {
-        std::vector<std::reference_wrapper<hpx::shared_future<void>>>
-            futures_of_parents;
+        std::vector<hpx::shared_future<void>> futures_of_parents;
         std::for_each(t->parents.begin(), t->parents.end(), [&](TaskRef tp) {
-          futures_of_parents.emplace_back(tp->future);
+          futures_of_parents.push_back(tp->future);
         });
         t->future = hpx::when_all(futures_of_parents, futures_of_parents.size())
-                        .then([&](auto &&...) { return t->f(); });
+                        .then([=](auto &&...) mutable { return t->f(); });
       }
     }
 
     mtx.unlock();
 
-    std::vector<std::reference_wrapper<hpx::shared_future<void>>>
-        futures_of_youngest_children;
+    std::vector<hpx::shared_future<void>> futures_of_youngest_children;
 
     for (auto &it : task_map)
       if (it.second->children.size() == 0)
